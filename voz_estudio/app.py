@@ -26,9 +26,19 @@ cancel_flags = {}
 jobs_lock = threading.Lock()
 
 
+def prepare_engine():
+    try:
+        engine.load()
+    except Exception:
+        logging.exception('No se ha podido preparar el motor al iniciar.')
+
+
 @asynccontextmanager
 async def lifespan(app):
     store.recover_interrupted()
+    engine.state = 'loading'
+    # Use the generation queue so requests cannot load the model concurrently.
+    generation_pool.submit(prepare_engine)
     yield
     with jobs_lock:
         for flag in cancel_flags.values():

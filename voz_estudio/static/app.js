@@ -6,6 +6,13 @@ const states = {queued:'En cola',processing:'Preparando voz',ready:'Preparada',l
 let voices = [], voiceSignature = '', page = 'generar', activeId = null, polling = false, historyLimit = 50;
 let playerAbort, mediaURL, mediaSource, sourceBuffer, streamQueue = [], streamFinished = false, livePlayback = false;
 let lastRecord = null, registering = false, autoSelect = null;
+let engineAvailable = false;
+const engineMessage = document.createElement('p');
+engineMessage.className = 'footnote';
+engineMessage.setAttribute('role', 'status');
+engineMessage.setAttribute('aria-live', 'polite');
+$('generate-button').parentElement.before(engineMessage);
+$('generate-button').disabled = true;
 
 function notice(text, error = false) { $('notice').textContent = text; $('notice').hidden = !text; $('notice').classList.toggle('error', error); }
 async function api(url, options = {}) {
@@ -108,7 +115,7 @@ function showRecord(record) {
   $('elapsed').textContent = seconds(record.processing_s ?? record.elapsed_s);
   $('first').textContent = seconds(record.first_audio_s);
   $('duration').textContent = seconds(record.audio_duration_s);
-  $('generate-button').disabled = busy; $('cancel').hidden = !busy;
+  $('generate-button').disabled = busy || !engineAvailable; $('cancel').hidden = !busy;
   document.body.classList.toggle('busy', busy);
   $('progress').textContent = record.error || ({queued:'En cola. El audio se guardará aunque cambies de apartado.',loading:'Preparando el modelo en este ordenador. La primera carga puede tardar.',generating:`Generando con ${record.voice_name}…`,completed:`Guardado: ${record.filename}`,cancelled:'Generación cancelada. El audio parcial se conserva si se ha producido.'}[record.status] || '');
   $('downloads').hidden = busy || !record.audio_bytes;
@@ -120,13 +127,13 @@ function showRecord(record) {
   }
 }
 $('generate-form').onsubmit = async event => {
-  event.preventDefault(); if (activeId) return;
+  event.preventDefault(); if (activeId || !engineAvailable) return;
   if (!$('voice').value) { location.hash = 'voces'; return notice('Registra primero una voz.'); }
   $('generate-button').disabled = true; notice(''); resetPlayer(); $('downloads').hidden = true;
   try {
     const record = await api('/api/recordings', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voice_id:$('voice').value,text:$('text').value})});
     activeId = record.id; showRecord(record); startPlayback(record.id); await refreshStatus();
-  } catch (error) { $('generate-button').disabled = false; notice(error.message, true); }
+  } catch (error) { $('generate-button').disabled = !engineAvailable; notice(error.message, true); }
 };
 $('cancel').onclick = async () => { if (!activeId) return; try { await api(`/api/recordings/${activeId}/cancel`, {method:'POST'}); $('progress').textContent = 'Cancelando al terminar el fragmento en curso…'; } catch (error) { notice(error.message, true); } };
 
@@ -169,6 +176,10 @@ async function refreshStatus() {
   const status = await api('/api/status');
   $('record-count').textContent = status.recordings;
   $('engine').textContent = status.engine==='loading'?'Preparando motor':status.engine==='ready'?(status.device==='cuda'?'GPU · motor preparado':'CPU · motor preparado'):status.engine==='error'?'Motor pendiente de revisar':'Motor en espera';
+  engineAvailable = status.engine === 'ready' || status.engine === 'error';
+  $('generate-button').disabled = !!activeId || !engineAvailable;
+  $('generate-button').innerHTML = engineAvailable ? 'Generar audio <span>↗</span>' : 'Preparando voz…';
+  engineMessage.textContent = status.engine === 'ready' ? 'Motor preparado. Ya puedes generar audio.' : status.engine === 'error' ? `No se ha podido preparar el motor: ${status.error || 'error desconocido'}. Puedes reintentarlo al generar.` : 'Preparando voz… Estamos cargando el modelo y la aceleración. Puedes escribir el texto mientras esperas.';
 }
 async function poll() {
   if (polling) return; polling=true;

@@ -21,7 +21,7 @@ La aplicación usa voz natural. La prueba de control de risas y llanto no funcio
 - Sin CUDA se ofrece inferencia CPU, más lenta y con entrega de audio por pasajes. Linux y el modo CPU disponen de instalación, pero necesitan validarse en el hardware de destino. En macOS se utiliza CPU; no se ha implementado aceleración Metal.
 - Varios GB libres para Python y los modelos. No se incluyen pesos de modelos en GitHub.
 
-No se garantiza la misma latencia en cualquier ordenador. La carga inicial prepara el modelo y la aceleración; las siguientes peticiones reutilizan el motor. Las voces se interpretan a partir de referencias: no se entrena un modelo nuevo por persona.
+No se garantiza la misma latencia en cualquier ordenador. Al iniciar, la aplicación prepara el modelo y la aceleración en segundo plano. Puedes escribir mientras aparece «Preparando voz…»; el botón de generar se activa cuando el motor está listo. Las siguientes peticiones reutilizan el motor. Si la preparación falla, se muestra el error y se permite reintentar al generar. Las voces se interpretan a partir de referencias: no se entrena un modelo nuevo por persona.
 
 ## Instalación en Windows
 
