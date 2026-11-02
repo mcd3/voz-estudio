@@ -1,0 +1,15 @@
+.venv/
+data/
+models/
+settings.local.json
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+*.log
+.env
+.env.*
+.DS_Store
+.pytest_cache/
+.cache/
