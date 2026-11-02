@@ -13,3 +13,6 @@ dist/
 .DS_Store
 .pytest_cache/
 .cache/
+.portable-cache/
+portable-dist/
+portable-qa/
