@@ -13,26 +13,13 @@ Una aplicación local para **registrar voces**, convertir textos en audio con la
 
 La aplicación usa voz natural. La prueba de control de risas y llanto no funcionó y no se ofrece esa función. No incluye un RAG ni un asistente conversacional.
 
-## Paquete portable para Windows y NVIDIA
-
-La edición portable incluye Python 3.12, las bibliotecas, PyTorch CUDA 12.8 y los modelos Qwen3-TTS y Whisper small. Después de descargarla no necesita instalar Python ni acceder a Internet. Sigue necesitando Windows de 64 bits y un controlador NVIDIA compatible con CUDA 12.8. El hardware validado es una RTX 4090 Laptop de 16 GB; otros equipos necesitan comprobarse.
-
-1. En [Releases](https://github.com/mcd3/voz-estudio/releases), descarga `Preparar-Voz-Estudio.zip` y **todas** las partes `.zip.001`, `.zip.002`, etc. de la misma versión.
-2. Extrae `Preparar-Voz-Estudio.zip` en la carpeta donde están las partes y abre `Preparar.cmd`. Comprueba las huellas SHA-256, une y extrae el paquete sin descargar nada. Reserva unos 25 GB libres durante la preparación.
-3. Dentro de la carpeta preparada, abre `Iniciar.cmd`. La edición portable usa el puerto 3020. Para cerrarla, abre `Detener.cmd`.
-4. Conserva una copia de `data`: contiene tus voces, textos y grabaciones. El paquete público empieza sin datos personales. `Comprobar.cmd` verifica los archivos y bibliotecas incluidos.
-
-Puedes mover la carpeta completa a otro disco. Para elegir otro puerto: `Iniciar.cmd --port 3021`. No ejecutes la aplicación directamente desde un ZIP ni sobrescribas una instalación con datos: prepara cada versión en una carpeta nueva y copia tu carpeta `data` con los servidores detenidos.
-
-Los archivos grandes se distribuyen como adjuntos de Releases, separados del historial Git. La receta está en `scripts/portable`, con versiones exactas de bibliotecas y revisiones de los modelos. Para construirla en Windows con Python 3.12: `python scripts/portable/build.py`. La construcción necesita Internet y espacio libre; el paquete resultante funciona sin descargas. No incluye el controlador de la tarjeta gráfica.
-
-## Requisitos de la instalación desde código
+## Requisitos
 
 - Python **3.12 de 64 bits** y conexión a Internet para la instalación inicial.
 - Windows 10/11 o un sistema compatible con las dependencias Python indicadas.
 - Recomendado: GPU NVIDIA con controladores compatibles con PyTorch CUDA 12.8 y suficiente memoria libre. La configuración probada es una RTX 4090 Laptop de 16 GB.
 - Sin CUDA se ofrece inferencia CPU, más lenta y con entrega de audio por pasajes. Linux y el modo CPU disponen de instalación, pero necesitan validarse en el hardware de destino. En macOS se utiliza CPU; no se ha implementado aceleración Metal.
-- Varios GB libres para Python y los modelos. Los pesos no forman parte del código fuente Git; la edición portable los incluye en los adjuntos de Releases.
+- Varios GB libres para Python y los modelos. No se incluyen pesos de modelos en GitHub.
 
 No se garantiza la misma latencia en cualquier ordenador. La carga inicial prepara el modelo y la aceleración; las siguientes peticiones reutilizan el motor. Las voces se interpretan a partir de referencias: no se entrena un modelo nuevo por persona.
 
