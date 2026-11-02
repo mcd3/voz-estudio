@@ -1,68 +1,15 @@
-name: Windows NVIDIA portable
+name: Stop portable publication
 on:
-  workflow_dispatch:
   push:
     branches: [main]
-    paths:
-      - 'scripts/portable/**'
-      - '.github/workflows/portable.yml'
+    paths: ['.github/workflows/portable.yml']
 permissions:
-  contents: write
+  contents: read
 concurrency:
   group: portable-release
   cancel-in-progress: true
 jobs:
-  build:
-    runs-on: windows-latest
-    timeout-minutes: 90
-    env:
-      PIP_NO_CACHE_DIR: '1'
-      PYTHONDONTWRITEBYTECODE: '1'
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  stop:
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12.10'
-          architecture: x64
-      - name: Identify release
-        shell: pwsh
-        run: |
-          $version = python -c "from voz_estudio import __version__; print(__version__)"
-          "VOZ_TAG=v$version-windows-nvidia" >> $env:GITHUB_ENV
-          $existing = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/v$version-windows-nvidia" 2>$null
-          if ($LASTEXITCODE -eq 0 -and !($existing | ConvertFrom-Json).draft) {
-            throw 'This version is already published. Increment the application version before releasing again.'
-          }
-          $global:LASTEXITCODE = 0
-      - name: Test split archives and safe extraction
-        run: python -m unittest discover -s tests -p test_portable.py -v
-      - name: Build standalone runtime and offline models
-        run: python scripts/portable/build.py --output portable-dist --prune-wheels
-      - name: Publish complete release
-        shell: pwsh
-        run: |
-          $notes = @'
-          Voz Estudio para Windows de 64 bits y GPU NVIDIA, con Python 3.12, PyTorch CUDA 12.8, Faster Qwen3-TTS, Qwen3-TTS Base 0.6B y Whisper small incluidos.
-
-          Descarga Preparar-Voz-Estudio.zip y TODAS las partes .zip.001, .zip.002, etc. Extrae el ZIP de preparación junto a las partes y abre Preparar.cmd. Después, abre Iniciar.cmd dentro de la carpeta preparada. Necesitas unos 25 GB libres durante la preparación y un controlador NVIDIA compatible; no necesitas instalar Python ni descargar modelos.
-
-          El paquete empieza sin voces, textos ni grabaciones personales. Guarda tus datos en data. Las versiones y revisiones están fijadas, las licencias se conservan y se incluyen manifiestos SHA-256.
-
-          La receta se valida en GitHub Actions mediante importaciones con el Python incluido y bloqueo de conexiones externas. La transcripción y síntesis GPU se han probado localmente en una RTX 4090 Laptop de 16 GB; no se garantiza la misma latencia en otros equipos. El paquete de Actions no se ejecuta con GPU en el servidor de compilación.
-          '@
-          $notes | Set-Content -Encoding utf8 release-notes.txt
-          $existing = gh api "repos/$env:GITHUB_REPOSITORY/releases/tags/$env:VOZ_TAG" 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $env:VOZ_TAG --target $env:GITHUB_SHA --draft --title "Voz Estudio $env:VOZ_TAG" --notes-file release-notes.txt
-            if ($LASTEXITCODE -ne 0) { throw 'Could not create release draft.' }
-          } elseif (!(($existing | ConvertFrom-Json).draft)) {
-            throw 'Refusing to replace a published release.'
-          }
-          $files = Get-ChildItem -LiteralPath portable-dist/release -File
-          foreach ($file in $files) {
-            gh release upload $env:VOZ_TAG $file.FullName --clobber
-            if ($LASTEXITCODE -ne 0) { throw "Upload failed: $($file.Name)" }
-          }
-          gh release edit $env:VOZ_TAG --draft=false --latest --notes-file release-notes.txt
-          if ($LASTEXITCODE -ne 0) { throw 'Could not publish release.' }
+      - run: echo 'Portable distribution stays local; GitHub retains the standard installer.'
