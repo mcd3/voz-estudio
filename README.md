@@ -1,17 +1,25 @@
-# Voz Estudio
+# Voz Estudio 2.0
 
 Una aplicación local para **registrar voces**, convertir textos en audio con la persona elegida y conservar una biblioteca de MP3 con su texto y metadatos JSON.
+
+**Versión 2.0.0** · Cinco modelos Qwen3-TTS, diez idiomas y automático, creación de voces, clonación y comparación de resultados.
+
+## Manual de uso
+
+Abre **Manual de uso** desde la aplicación. Incluye una guía paso a paso para registrar y clonar voces, inventarlas con VoiceDesign, utilizar CustomVoice, elegir idiomas y comparar resultados. También puedes abrir el archivo `voz_estudio/static/manual.html` y utilizar Imprimir / guardar como PDF.
 
 ## Qué puedes hacer
 
 - Registrar una voz con un nombre y una muestra WAV, MP3, M4A, FLAC u otro formato compatible con FFmpeg/PyAV.
 - Preparar automáticamente una referencia de hasta unos 20 segundos y su transcripción, sin subir la grabación a servicios externos.
-- Generar textos en castellano con Qwen3-TTS Base 0.6B. Con NVIDIA se utiliza Faster Qwen3-TTS y CUDA Graphs, con audio progresivo.
+- Elegir entre Base 0.6B/1.7B, CustomVoice 0.6B/1.7B y VoiceDesign 1.7B, con idioma y ajustes de generación. Con NVIDIA se utiliza Faster Qwen3-TTS y CUDA Graphs.
+- Crear muestras desde una descripción o una voz incluida y guardarlas como voces clonables.
+- Comparar los tamaños 0.6B y 1.7B con el mismo texto y ajustes, separando carga, síntesis, primer audio y VRAM, y guardando valoraciones de escucha.
 - Escuchar, descargar, buscar por persona o texto, reutilizar textos y cancelar generaciones.
 - Guardar automáticamente **cada intento de generación**, incluido su texto completo, persona, fecha, estado y tiempos. Los audios parciales se conservan si una operación se cancela o falla.
 - Descargar el JSON de un audio o exportar el historial completo.
 
-La aplicación usa voz natural. La prueba de control de risas y llanto no funcionó y no se ofrece esa función. No incluye un RAG ni un asistente conversacional.
+Las instrucciones de interpretación se ofrecen en VoiceDesign y CustomVoice 1.7B. Una risa, un llanto o un acento concreto dependen del resultado del modelo y no están garantizados. No incluye un RAG ni un asistente conversacional.
 
 ## Requisitos
 
@@ -49,6 +57,58 @@ bash start.sh
 Necesitas `python3.12` y su módulo `venv`. Para forzar CPU: `VOZ_DEVICE=cpu bash install.sh`, y después `VOZ_DEVICE=cpu bash start.sh`.
 
 ## Uso
+
+### Modelos, idiomas y comparación
+
+El instalador normal mantiene Base 0.6B como punto de partida. Ejecuta **Instalar-Modelos-Qwen.cmd** para instalar los cinco modelos públicos de la familia 12Hz. La copia completa local los incluye. Las revisiones están fijadas en `voz_estudio/catalog.py`; no se descargan pesos durante la generación.
+
+| Modelo | Para qué sirve | Instrucciones de estilo |
+|---|---|---|
+| Base 0.6B | Clonar voces registradas y muestras guardadas | No |
+| Base 1.7B | Clonar las mismas referencias con el modelo mayor | No |
+| CustomVoice 0.6B | Generar con nueve voces incluidas | No |
+| CustomVoice 1.7B | Nueve voces incluidas con instrucciones de interpretación | Sí |
+| VoiceDesign 1.7B | Crear una muestra mediante una descripción | Sí |
+
+En **Generar audio** elige Base para clonar una persona o CustomVoice para una voz incluida. En **Crear una voz** puedes usar VoiceDesign o cualquiera de los CustomVoice, escuchar la muestra y guardarla para clonarla después con cualquiera de los Base. Las voces incluidas son Vivian, Serena, Uncle_Fu, Dylan, Eric, Ryan, Aiden, Ono_Anna y Sohee. Sus lenguas nativas se muestran en el selector; no hay una voz nativa española incluida.
+
+Se puede elegir español, inglés, francés, alemán, italiano, portugués, chino, japonés, coreano, ruso o automático. El selector no traduce el texto. Español es el idioma, no una garantía de acento de España. En el registro de audio puedes elegir el idioma de la referencia o dejar que Whisper lo detecte. La lengua de la referencia y la del audio nuevo pueden ser diferentes.
+
+Las opciones de generación incluyen semilla, temperatura, Top P, Top K, penalización de repetición, muestreo y límite de tokens de audio por pasaje. El límite puede cortar una generación si es insuficiente; textos largos se dividen en pasajes. La semilla permite repetir pruebas, pero no hace equivalentes dos modelos distintos ni garantiza igualdad entre equipos/versiones.
+
+Para obtener otra variante de una voz diseñada con la misma descripción, cambia la semilla. Para reconstruir un portable con todos los modelos desde las herramientas locales, utiliza `python scripts/portable/build.py --all-models`; admite `--model-cache` y `--whisper-cache` para reutilizar los modelos instalados.
+
+Para comparar, escribe el texto, selecciona el idioma y la voz o locutor, y pulsa **Comparar 0.6B y 1.7B con este texto**. La aplicación genera cuatro audios en cola: cada modelo con carga nueva y una repetición en memoria. Las comparaciones CustomVoice requieren dejar vacío el estilo para utilizar opciones comunes a ambos tamaños.
+
+La pantalla **Comparar** separa carga, primer audio con/sin carga, síntesis, duración y pico de VRAM asignado por PyTorch. `RTF = tiempo de síntesis / duración del audio`; menor es más rápido y un valor menor de 1 significa que se sintetiza más deprisa de lo que se escucha. La VRAM medida no representa toda la memoria ocupada por el sistema u otros procesos. El tiempo de cola no se incluye en `processing_s`.
+
+Tras escuchar las repeticiones, puntúa naturalidad, claridad y parecido/estabilidad, y escribe tus motivos. Las valoraciones se guardan en el JSON del audio. La aplicación muestra el modelo con menor RTF en esa prueba y compara tus puntuaciones cuando has evaluado ambos; no asigna una calidad automáticamente. Prueba varias frases, idiomas y referencias antes de elegir un modelo. Los audios, ajustes y comparaciones se guardan en `data`, y puedes descargar la comparación completa como JSON.
+
+Una prueba local con RTX 4090 Laptop de 16 GB, un texto español de 121 caracteres, semilla 42 y ajustes comunes produjo estos valores con el modelo ya cargado:
+
+| Modelo | Síntesis | Audio resultante | RTF | Pico VRAM PyTorch |
+|---|---:|---:|---:|---:|
+| Base 0.6B | 2,97 s | 7,76 s | 0,382 | 2787 MB |
+| Base 1.7B | 4,22 s | 8,32 s | 0,507 | 4751 MB |
+| CustomVoice 0.6B | 3,50 s | 9,20 s | 0,381 | 2433 MB |
+| CustomVoice 1.7B | 5,11 s | 12,56 s | 0,407 | 4381 MB |
+
+Son resultados de una frase y de dos casos de uso distintos: los Base compartían referencia y los CustomVoice compartían el locutor Ryan. Los 0.6B resultaron más rápidos en estas muestras y utilizaron menos VRAM; la calidad queda pendiente de escucha. Las pruebas de carga nueva miden recarga del modelo dentro de un servidor ya iniciado.
+
+### Crear una voz con una descripción
+
+La opción **Crear una voz** utiliza el modelo opcional **Qwen3-TTS 1.7B VoiceDesign**. Para instalarlo desde el repositorio, ejecuta `Instalar-VoiceDesign.cmd` después de la instalación normal. Descarga varios GB adicionales. La copia completa local ya tiene el modelo instalado.
+
+1. Abre **Crear una voz**, ponle un nombre y describe el timbre, la edad aproximada, el acento y la forma de hablar. Por ejemplo: «Voz femenina adulta, cálida y serena, castellano de España, dicción clara y ritmo natural».
+2. Escribe un texto de muestra de unos 10–20 segundos y pulsa **Crear muestra**. La descripción orienta el resultado; puedes probar distintas muestras.
+3. Escucha el resultado. Si te gusta, pulsa **Guardar como voz clonable**. Aparecerá en **Mis voces** y **Generar audio**.
+4. Selecciónala para leer nuevos textos con el motor Base 0.6B acelerado. La muestra y su texto se utilizan como referencia; no se entrena un modelo por personaje.
+
+La GPU se utiliza de forma secuencial. Durante el diseño se libera el motor de clonación, se carga VoiceDesign en un proceso aislado y, al terminar, se prepara otra vez el motor de clonación. Cambiar de modelo añade una espera. También se admite CPU, con mayor latencia y sin una validación de rendimiento específica.
+
+Los diseños y sus WAV se guardan en `data/designs`; las voces aceptadas se guardan en `data/voices` con su descripción y procedencia. Guardar dos veces la misma muestra conserva una sola voz. El modelo queda instalado para usarlo sin descargas posteriores. No se garantiza un acento o interpretación exactos por escribirlos en la descripción.
+
+### Registrar voces y generar audio
 
 1. En **Mis voces**, escribe el nombre de la persona y selecciona su audio. Recomendamos 10–30 segundos de voz clara, sin música ni otras personas. Se aceptan de 3 segundos a 2 minutos y hasta 50 MB.
 2. Espera a **Preparada**. Se crea una referencia y se transcribe localmente. Si el registro falla, el mensaje explica el problema y permite reintentarlo.

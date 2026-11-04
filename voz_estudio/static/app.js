@@ -14,6 +14,18 @@ engineMessage.setAttribute('aria-live', 'polite');
 $('generate-button').parentElement.before(engineMessage);
 $('generate-button').disabled = true;
 
+// Advanced controls can be collapsed. Surface native validation failures.
+for (const form of document.querySelectorAll('form')) {
+  form.addEventListener('invalid', event => {
+    const field=event.target;
+    const details=field.closest('details');
+    if(details)details.open=true;
+    const label=field.labels?.[0]?.textContent.trim() || field.name || 'un campo';
+    notice(`Revisa ${label}: ${field.validationMessage}`,true);
+  },true);
+}
+
+
 function notice(text, error = false) { $('notice').textContent = text; $('notice').hidden = !text; $('notice').classList.toggle('error', error); }
 async function api(url, options = {}) {
   const response = await fetch(url, options);
@@ -24,13 +36,15 @@ async function api(url, options = {}) {
   return response.json();
 }
 function navigate(next) {
-  page = ['generar','voces','biblioteca'].includes(next) ? next : 'generar';
+  page = ['generar','voces','crear','comparar','biblioteca'].includes(next) ? next : 'generar';
   document.querySelectorAll('.page').forEach(node => node.hidden = node.id !== page);
   document.querySelectorAll('.nav').forEach(node => node.classList.toggle('active', node.dataset.page === page));
-  $('page-label').textContent = {generar:'Generar audio',voces:'Mis voces',biblioteca:'Biblioteca'}[page];
+  $('page-label').textContent = {generar:'Generar audio',voces:'Mis voces',crear:'Crear una voz',comparar:'Comparar modelos',biblioteca:'Biblioteca'}[page];
   if (page === 'biblioteca') loadHistory().catch(error => notice(error.message, true));
+  if (page === 'crear' && typeof refreshDesigns === 'function') refreshDesigns().catch(error => notice(error.message,true));
+  if (page === 'comparar' && typeof refreshComparisons === 'function') refreshComparisons().catch(error=>notice(error.message,true));
 }
-document.querySelectorAll('.nav').forEach(node => node.onclick = () => { location.hash = node.dataset.page; });
+document.querySelectorAll('.nav[data-page]').forEach(node => node.onclick = () => { location.hash = node.dataset.page; });
 window.addEventListener('hashchange', () => navigate(location.hash.slice(1)));
 $('add-voice').onclick = () => { location.hash = 'voces'; $('name').focus(); };
 $('text').oninput = () => { $('characters').textContent = $('text').value.length.toLocaleString('es-ES') + ' / 50.000 caracteres'; };
@@ -74,6 +88,7 @@ $('voice-form').onsubmit = async event => {
   registering = true; $('register').disabled = true; $('upload-status').textContent = 'Subiendo la muestra…'; notice('');
   const data = new FormData(); data.append('name', $('name').value.trim()); data.append('audio', file);
   try {
+    data.append('language',$('reference-language').value);
     const voice = await api('/api/voices', {method:'POST', body:data}); autoSelect = voice.id;
     $('upload-status').textContent = 'Muestra recibida. Preparando la voz y su transcripción…';
     $('voice-form').reset(); $('audio-file').onchange(); await refreshVoices();
@@ -128,10 +143,10 @@ function showRecord(record) {
 }
 $('generate-form').onsubmit = async event => {
   event.preventDefault(); if (activeId || !engineAvailable) return;
-  if (!$('voice').value) { location.hash = 'voces'; return notice('Registra primero una voz.'); }
+  if (!$('voice').value && !usesCustomVoice()) { location.hash = 'voces'; return notice('Registra primero una voz.'); }
   $('generate-button').disabled = true; notice(''); resetPlayer(); $('downloads').hidden = true;
   try {
-    const record = await api('/api/recordings', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({voice_id:$('voice').value,text:$('text').value})});
+    const record = await api('/api/recordings', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...generationOptions(),text:$('text').value})});
     activeId = record.id; showRecord(record); startPlayback(record.id); await refreshStatus();
   } catch (error) { $('generate-button').disabled = !engineAvailable; notice(error.message, true); }
 };
@@ -144,6 +159,11 @@ function recordCard(record) {
   const date = new Date(record.created_at).toLocaleString('es-ES', {dateStyle:'medium',timeStyle:'short'});
   node.innerHTML = `<div class="record-head"><div><h3>${escapeHTML(record.voice_name)}</h3><small>${escapeHTML(date)} · ${record.characters.toLocaleString('es-ES')} caracteres</small></div><span class="pill">${states[record.status]}</span></div><p class="preview">${escapeHTML(record.text.slice(0,180))}${record.text.length>180?'…':''}</p>${record.error?`<p class="error">${escapeHTML(record.error)}</p>`:''}${hasAudio?`<audio controls preload="none" src="/api/recordings/${record.id}/audio" aria-label="Audio de ${escapeHTML(record.voice_name)}"></audio>`:''}<details><summary>Ver texto completo</summary><pre>${escapeHTML(record.text)}</pre></details><div class="meta">Audio: ${seconds(record.audio_duration_s)} · Procesamiento: ${seconds(record.processing_s)} · Primer fragmento: ${seconds(record.first_audio_s)}</div><div class="actions">${hasAudio?`<a class="primary small" href="/api/recordings/${record.id}/audio?download=true">Descargar MP3 ↓</a>`:''}<a class="secondary small" href="/api/recordings/${record.id}/json">Texto y JSON ↓</a><button class="text-button reuse">Reutilizar texto ↗</button></div>`;
   node.querySelector('.reuse').onclick = () => { $('text').value = record.text; $('text').oninput(); if (voices.some(v=>v.id===record.voice_id && v.status==='ready')) $('voice').value=record.voice_id; location.hash='generar'; };
+  const identity=document.createElement('p');identity.className='footnote';
+  identity.textContent=`${record.engine || 'Base 0.6B'} · ${record.language || 'Spanish'} · Carga: ${seconds(record.model_preparation_s)} · Síntesis: ${seconds(record.inference_s)} · RTF: ${record.rtf ?? '—'}`;
+  node.querySelector('.meta').before(identity);
+  const reuse=node.querySelector('.reuse').onclick;
+  node.querySelector('.reuse').onclick=()=>{reuse();$('gen-model').value=record.model||'base06';$('gen-language').value=record.language||'Spanish';$('gen-speaker').value=record.speaker||'Ryan';$('gen-style').value=record.instruct||'';updateGenerationControls();};
   return node;
 }
 async function loadHistory(reset = false) {
@@ -175,17 +195,20 @@ $('more').onclick = () => { historyLimit+=50;loadHistory().catch(error=>notice(e
 async function refreshStatus() {
   const status = await api('/api/status');
   $('record-count').textContent = status.recordings;
-  $('engine').textContent = status.engine==='loading'?'Preparando motor':status.engine==='ready'?(status.device==='cuda'?'GPU · motor preparado':'CPU · motor preparado'):status.engine==='error'?'Motor pendiente de revisar':'Motor en espera';
+  $('engine').textContent = status.engine==='designing'?'Creando una voz':status.engine==='loading'?'Preparando motor':status.engine==='ready'?`${status.device==='cuda'?'GPU':'CPU'} · ${status.loaded_model || 'motor preparado'}`:status.engine==='error'?'Motor pendiente de revisar':'Motor en espera';
   engineAvailable = status.engine === 'ready' || status.engine === 'error';
   $('generate-button').disabled = !!activeId || !engineAvailable;
   $('generate-button').innerHTML = engineAvailable ? 'Generar audio <span>↗</span>' : 'Preparando voz…';
-  engineMessage.textContent = status.engine === 'ready' ? 'Motor preparado. Ya puedes generar audio.' : status.engine === 'error' ? `No se ha podido preparar el motor: ${status.error || 'error desconocido'}. Puedes reintentarlo al generar.` : 'Preparando voz… Estamos cargando el modelo y la aceleración. Puedes escribir el texto mientras esperas.';
+  engineMessage.textContent = status.engine === 'designing' ? 'Creando una muestra con VoiceDesign. El motor de clonación se preparará al terminar.' : status.engine === 'ready' ? 'Motor preparado. Ya puedes generar audio.' : status.engine === 'error' ? `No se ha podido preparar el motor: ${status.error || 'error desconocido'}. Puedes reintentarlo al generar.` : 'Preparando voz… Estamos cargando el modelo y la aceleración. Puedes escribir el texto mientras esperas.';
+  $('design-install').hidden = status.design_model_available;
 }
 async function poll() {
   if (polling) return; polling=true;
   try {
     if (activeId) { const id=activeId; const record=await api('/api/recordings/'+id); if(activeId===id) { showRecord(record); if(!activeId) { await refreshStatus(); if(page==='biblioteca') await loadHistory(); } } }
     await refreshVoices();
+    if (page === 'crear') await refreshDesigns();
+    if (page === 'comparar') await refreshComparisons();
     if ($('notice').textContent === 'No se ha podido conectar con la aplicación. Comprueba que sigue abierta.') notice('');
     if (page==='biblioteca' && activeId) await loadHistory();
   } catch (error) { notice('No se ha podido conectar con la aplicación. Comprueba que sigue abierta.',true); }

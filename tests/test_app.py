@@ -18,10 +18,13 @@ class FakeEngine:
     state, mode, error = 'idle', None, None
     def __init__(self):
         self.used_voices = []
-    def load(self):
+    def load(self, key='base06'):
         self.state, self.mode = 'ready', 'cpu'
-    def generate(self, text, voice):
-        self.used_voices.append(voice['id'])
+        self.model_key=key
+    def unload(self):
+        self.state,self.model_key='idle',None
+    def generate(self, text, voice, options=None):
+        self.used_voices.append(voice['id'] if voice else 'custom')
         for _ in range(3):
             time.sleep(0.02)
             yield (np.sin(np.arange(2400) * 0.08) * .1).astype(np.float32), 24000, {}

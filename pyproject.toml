@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "voz-estudio"
-version = "1.0.0"
+version = "2.0.0"
 description = "Estudio local de clonación de voz, síntesis e historial con JSON"
 requires-python = ">=3.12,<3.13"
 license = "MIT"
